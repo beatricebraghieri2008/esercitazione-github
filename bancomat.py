@@ -1,154 +1,202 @@
-import time
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime
 
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'
 
-class Bancomat:
-    def __init__(self, pin_correttivo="1234", saldo_iniziale=1000, nome_utente="Utente"):
-        self.pin_correttivo = pin_correttivo
-        self.saldo = saldo_iniziale
-        self.logged_in = False
-        self.transazioni = []  # Lista per memorizzare le transazioni
-        self.obiettivo_risparmio = 0  # Impostazione obiettivo di risparmio
+# Simuliamo un database di conti bancari
+class ContoBancario:
+    def __init__(self, nome_utente, pin, tipo_conto, saldo_iniziale=1000):
         self.nome_utente = nome_utente
+        self.pin = pin
+        self.tipo_conto = tipo_conto  # Conto corrente, conto risparmio
+        self.saldo = saldo_iniziale
+        self.saldo_risparmio = 0
+        self.transazioni = []
+        self.obiettivo_risparmio = 0
+        self.limite_prelievo = 500
+        self.commissioni = {'prelievo': 2, 'deposito': 1, 'trasferimento': 5}
+        self.saldo_minimo = 100
+        self.prestito = 0
+        self.carica_cashback = 0.01
+        self.domanda_segreta = "Qual è il nome della tua prima scuola?"
+        self.risparmio_automatico_percentuale = 0.05
 
     def login(self, pin):
-        """Autenticazione dell'utente tramite PIN."""
-        if pin == self.pin_correttivo:
-            self.logged_in = True
-            print(f"Benvenuto {self.nome_utente}!\n")
-            return True
-        return False
-
-    def logout(self):
-        """Logout dell'utente."""
-        self.logged_in = False
-        print("Uscita effettuata. Arrivederci!\n")
+        return pin == self.pin
 
     def mostra_saldo(self):
-        """Visualizza il saldo attuale e l'obiettivo di risparmio."""
-        print(f"\nSaldo disponibile: €{self.saldo}")
-        if self.obiettivo_risparmio > 0:
-            print(f"Obiettivo risparmio: €{self.obiettivo_risparmio} ({self.obiettivo_risparmio - self.saldo} da raggiungere)")
+        return self.saldo
+
+    def deposita_denaro(self, importo):
+        if importo <= 0:
+            return "Importo non valido."
+        self.saldo += importo - self.commissioni['deposito']
+        self.transazioni.append(f"Deposito di {importo} EUR")
+        self.applica_risparmio_automatico(importo)
+        return f"Deposito di {importo} EUR effettuato!"
 
     def preleva_denaro(self, importo):
-        """Esegui un prelievo, se il saldo è sufficiente."""
         if importo <= 0:
             return "Importo non valido."
         elif importo > self.saldo:
             return "Saldo insufficiente."
-        else:
-            self.saldo -= importo
-            self.transazioni.append((f"Prelievo di €{importo}", datetime.now()))
-            return f"Prelievo di €{importo} effettuato con successo!"
-
-    def deposita_denaro(self, importo):
-        """Esegui un deposito."""
-        if importo <= 0:
-            return "Importo non valido."
-        else:
-            self.saldo += importo
-            self.transazioni.append((f"Deposito di €{importo}", datetime.now()))
-            return f"Deposito di €{importo} effettuato con successo!"
+        elif importo > self.limite_prelievo:
+            return f"Limite di prelievo giornaliero superato. Limite massimo: {self.limite_prelievo} EUR."
+        self.saldo -= importo + self.commissioni['prelievo']
+        self.transazioni.append(f"Prelievo di {importo} EUR")
+        return f"Prelievo di {importo} EUR effettuato!"
 
     def trasferisci_denaro(self, altro_conto, importo):
-        """Trasferisci denaro su un altro conto."""
         if importo <= 0:
             return "Importo non valido."
         elif importo > self.saldo:
-            return "Saldo insufficiente per il trasferimento!"
-        else:
-            self.saldo -= importo
-            altro_conto.saldo += importo
-            self.transazioni.append((f"Trasferimento di €{importo} a un altro conto", datetime.now()))
-            return f"Trasferimento di €{importo} effettuato con successo!"
+            return "Saldo insufficiente!"
+        elif self.tipo_conto == 'risparmio' and importo > self.saldo:
+            return f"Impossibile prelevare dal conto risparmio prima della scadenza."
+        self.saldo -= importo + self.commissioni['trasferimento']
+        altro_conto.saldo += importo
+        self.transazioni.append(f"Trasferimento di {importo} EUR a {altro_conto.nome_utente}")
+        return f"Trasferimento di {importo} EUR effettuato con successo!"
+
+    def calcola_interessi(self):
+        interesse = self.saldo_risparmio * 0.01
+        self.saldo_risparmio += interesse
+        return f"Interessi annuali aggiunti: {interesse} EUR"
+
+    def applica_risparmio_automatico(self, importo):
+        if importo > 100:
+            risparmio = importo * self.risparmio_automatico_percentuale
+            self.saldo_risparmio += risparmio
+            self.transazioni.append(f"Risparmio automatico: {risparmio} EUR")
+            return f"{risparmio} EUR sono stati trasferiti al conto risparmio."
 
     def imposta_obiettivo_risparmio(self, obiettivo):
-        """Imposta un obiettivo di risparmio."""
-        if obiettivo <= self.saldo:
-            return "L'importo dell'obiettivo deve essere maggiore del saldo attuale."
         self.obiettivo_risparmio = obiettivo
-        return f"Obiettivo di risparmio impostato a: €{obiettivo}"
-
+        return f"Obiettivo di risparmio impostato a: {obiettivo} EUR"
+    
     def mostra_transazioni(self):
-        """Mostra tutte le transazioni effettuate."""
-        if not self.transazioni:
-            return "Nessuna transazione effettuata."
-        return "\n".join([f"{transazione} - {data.strftime('%Y-%m-%d %H:%M:%S')}" for transazione, data in self.transazioni])
+        return "\n".join(self.transazioni)
 
-    def aggiorna_nome(self, nuovo_nome):
-        """Aggiorna il nome dell'utente."""
-        self.nome_utente = nuovo_nome
-        return f"Nome utente aggiornato a: {self.nome_utente}"
+    def cambia_valuta(self, nuova_valuta, tasso_cambio):
+        self.saldo *= tasso_cambio
+        return f"Valuta cambiata a {nuova_valuta}. Nuovo saldo: {self.saldo} EUR"
 
+    def aggiungi_prestito(self, importo):
+        self.prestito = importo
+        return f"Prestito di {importo} EUR concesso!"
 
-def mostra_menu():
-    """Visualizza il menu delle operazioni disponibili."""
-    print("\nMenu principale:")
-    print("1. Mostra saldo")
-    print("2. Preleva denaro")
-    print("3. Deposita denaro")
-    print("4. Trasferisci denaro")
-    print("5. Imposta obiettivo risparmio")
-    print("6. Mostra storico delle transazioni")
-    print("7. Esci")
+    def aggiorna_prestito(self, importo):
+        if importo <= 0 or self.prestito == 0:
+            return "Prestito non attivo."
+        self.prestito -= importo
+        return f"Rata del prestito di {importo} EUR pagata!"
 
+# Simuliamo un database di utenti
+utenti = {
+    '1234': ContoBancario(nome_utente="Mario Rossi", pin='1234', tipo_conto='corrente', saldo_iniziale=1000),
+    '5678': ContoBancario(nome_utente="Luigi Bianchi", pin='5678', tipo_conto='risparmio', saldo_iniziale=500)
+}
 
-def mostra_loading():
-    """Mostra un'animazione di caricamento."""
-    print("\nCaricamento in corso", end="")
-    for _ in range(5):
-        time.sleep(0.5)
-        print(".", end="", flush=True)
-    print()
+@app.route('/')
+def index():
+    if 'user' in session:
+        return redirect(url_for('home'))
+    return render_template('login.html')
 
+@app.route('/login', methods=['POST'])
+def login():
+    pin = request.form.get('pin')
+    if pin in utenti and utenti[pin].login(pin):
+        session['user'] = pin
+        return redirect(url_for('home'))
+    flash("PIN errato, riprova!")
+    return redirect(url_for('index'))
 
-def esegui_operazione(bancomat_utente, scelta):
-    """Esegui l'operazione scelta dall'utente."""
-    if scelta == "1":
-        bancomat_utente.mostra_saldo()
-    elif scelta == "2":
-        importo = float(input("Inserisci l'importo da prelevare: €"))
-        print(bancomat_utente.preleva_denaro(importo))
-    elif scelta == "3":
-        importo = float(input("Inserisci l'importo da depositare: €"))
-        print(bancomat_utente.deposita_denaro(importo))
-    elif scelta == "4":
-        importo = float(input("Inserisci l'importo da trasferire: €"))
-        altro_conto = Bancomat(pin_correttivo="4321", saldo_iniziale=500)
-        print(bancomat_utente.trasferisci_denaro(altro_conto, importo))
-    elif scelta == "5":
-        obiettivo = float(input("Imposta il tuo obiettivo di risparmio: €"))
-        print(bancomat_utente.imposta_obiettivo_risparmio(obiettivo))
-    elif scelta == "6":
-        print("\nStorico Transazioni:\n", bancomat_utente.mostra_transazioni())
-    elif scelta == "7":
-        print("Esci dal programma...")
-        bancomat_utente.logout()
+@app.route('/home')
+def home():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    conto = utenti[session['user']]
+    saldo = conto.mostra_saldo()
+    return render_template('home.html', saldo=saldo, nome_utente=conto.nome_utente, conti=utenti)
 
+@app.route('/deposito', methods=['POST'])
+def deposito():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    conto = utenti[session['user']]
+    importo = float(request.form.get('importo'))
+    result = conto.deposita_denaro(importo)
+    flash(result)
+    return redirect(url_for('home'))
 
-def main():
-    """Funzione principale che gestisce il flusso del programma."""
-    bancomat_utente = Bancomat()
+@app.route('/prelievo', methods=['POST'])
+def prelievo():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    conto = utenti[session['user']]
+    importo = float(request.form.get('importo'))
+    result = conto.preleva_denaro(importo)
+    flash(result)
+    return redirect(url_for('home'))
 
-    # Login
-    while True:
-        pin = input("Inserisci il PIN per accedere: ")
-        if bancomat_utente.login(pin):
-            break
-        else:
-            print("PIN errato. Riprova.\n")
+@app.route('/trasferimento', methods=['POST'])
+def trasferimento():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    conto = utenti[session['user']]
+    altro_pin = request.form.get('altro_pin')
+    importo = float(request.form.get('importo'))
 
-    # Menu interattivo
-    while True:
-        mostra_menu()
-        scelta = input("\nScegli un'operazione (1-7): ")
-        esegui_operazione(bancomat_utente, scelta)
+    if altro_pin not in utenti or altro_pin == session['user']:
+        flash("PIN del destinatario errato!")
+        return redirect(url_for('home'))
+    
+    altro_conto = utenti[altro_pin]
+    result = conto.trasferisci_denaro(altro_conto, importo)
+    flash(result)
+    return redirect(url_for('home'))
 
-        if scelta == "7":
-            break
+@app.route('/obiettivo', methods=['POST'])
+def obiettivo():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    conto = utenti[session['user']]
+    obiettivo = float(request.form.get('obiettivo'))
+    result = conto.imposta_obiettivo_risparmio(obiettivo)
+    flash(result)
+    return redirect(url_for('home'))
 
-        mostra_loading()
+@app.route('/prestito', methods=['POST'])
+def prestito():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    conto = utenti[session['user']]
+    importo = float(request.form.get('importo'))
+    result = conto.aggiungi_prestito(importo)
+    flash(result)
+    return redirect(url_for('home'))
 
+@app.route('/transazioni')
+def transazioni():
+    if 'user' not in session:
+        return redirect(url_for('index'))
+    
+    conto = utenti[session['user']]
+    transazioni = conto.mostra_transazioni()
+    return render_template('transazioni.html', transazioni=transazioni)
 
-if __name__ == "__main__":
-    main()
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    app.run(debug=True)

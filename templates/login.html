@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Bancomat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Login Bancomat</h1>
+        <form method="POST" action="{{ url_for('login') }}">
+            <label for="pin">PIN:</label>
+            <input type="password" name="pin" id="pin" required>
+            <button type="submit">Accedi</button>
+        </form>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="error">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>

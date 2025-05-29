@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benvenuto - Bancomat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Benvenuto {{ nome_utente }}</h1>
+        <p>Saldo disponibile: {{ saldo }} EUR</p>
+        <h2>Conti</h2>
+        <ul>
+            {% for pin, conto in conti.items() %}
+            <li>{{ conto.tipo_conto }}: {{ conto.mostra_saldo() }} EUR</li>
+            {% endfor %}
+        </ul>
+        <h2>Operazioni</h2>
+        <form method="POST" action="{{ url_for('deposito') }}">
+            <input type="number" name="importo" placeholder="Importo da depositare">
+            <button type="submit">Deposita</button>
+        </form>
+        <form method="POST" action="{{ url_for('prelievo') }}">
+            <input type="number" name="importo" placeholder="Importo da prelevare">
+            <button type="submit">Preleva</button>
+        </form>
+        <form method="POST" action="{{ url_for('trasferimento') }}">
+            <input type="text" name="altro_pin" placeholder="PIN destinatario">
+            <input type="number" name="importo" placeholder="Importo da trasferire">
+            <button type="submit">Trasferisci</button>
+        </form>
+        <form method="POST" action="{{ url_for('obiettivo') }}">
+            <input type="number" name="obiettivo" placeholder="Imposta obiettivo risparmio">
+            <button type="submit">Imposta obiettivo</button>
+        </form>
+        <form method="POST" action="{{ url_for('prestito') }}">
+            <input type="number" name="importo" placeholder="Richiedi prestito">
+            <button type="submit">Richiedi prestito</button>
+        </form>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </div>
+</body>
+</html>
